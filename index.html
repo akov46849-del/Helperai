@@ -17,20 +17,18 @@
     box-shadow: 0 20px 60px rgba(0,0,0,0.25);
     width: 100%; max-width: 460px; overflow: hidden;
     display: flex; flex-direction: column;
-    height: 92vh; max-height: 800px;
+    height: 92vh; max-height: 820px;
   }
-
-  /* setup */
   #setupScreen {
-    padding: 32px 24px; display: flex; flex-direction: column; gap: 20px;
-    justify-content: center; height: 100%;
+    padding: 32px 24px; display: flex; flex-direction: column; gap: 18px;
+    justify-content: center; height: 100%; overflow-y: auto;
   }
   #setupScreen h1 {
     font-size: 24px; text-align: center;
     background: linear-gradient(135deg, #667eea, #764ba2);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  #setupScreen p.subtitle { text-align: center; color: #888; font-size: 14px; margin-top: -12px; }
+  #setupScreen p.subtitle { text-align: center; color: #888; font-size: 14px; margin-top: -10px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 13px; font-weight: 600; color: #555; }
   .field select {
@@ -48,18 +46,17 @@
     display: none;
   }
 
-  /* chat */
   #chatScreen { display: none; flex-direction: column; height: 100%; }
   header {
     background: linear-gradient(135deg, #667eea, #764ba2);
-    color: #fff; padding: 14px 18px;
+    color: #fff; padding: 12px 16px;
     display: flex; align-items: center; gap: 10px;
   }
   .avatar {
-    width: 46px; height: 46px; border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     background: rgba(255,255,255,0.25);
     display: flex; justify-content: center; align-items: center;
-    font-size: 24px; border: 2px solid rgba(255,255,255,0.5);
+    font-size: 22px; border: 2px solid rgba(255,255,255,0.5);
   }
   .avatar.speaking { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
@@ -69,8 +66,8 @@
 
   .icon-btn {
     background: rgba(255,255,255,0.2); border: none; color: #fff;
-    min-width: 38px; height: 38px; padding: 0 10px; border-radius: 20px;
-    font-size: 14px; cursor: pointer; font-weight: 600;
+    min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px;
+    font-size: 13px; cursor: pointer; font-weight: 600;
   }
   .icon-btn:hover { background: rgba(255,255,255,0.35); }
   .icon-btn.muted { background: rgba(0,0,0,0.35); }
@@ -91,6 +88,22 @@
   .msg.system { align-self: center; background: transparent; color: #999; font-size: 12px; font-style: italic; padding: 4px; }
   .msg .translation { display: block; margin-top: 6px; font-size: 13px; color: #7a5cff; font-style: italic; }
 
+  /* индикатор уровня микрофона */
+  #levelWrap {
+    display: none; padding: 6px 14px; background: #fff;
+    border-top: 1px solid #eee; align-items: center; gap: 8px;
+  }
+  #levelWrap.show { display: flex; }
+  #levelBar {
+    flex: 1; height: 8px; background: #eee; border-radius: 4px; overflow: hidden;
+  }
+  #levelFill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #4cd964, #ffcc00, #ff3b30);
+    transition: width 0.06s linear;
+  }
+  #levelWrap .lbl { font-size: 11px; color: #888; min-width: 90px; }
+
   .input-row {
     padding: 10px 12px; background: #fff; border-top: 1px solid #eee;
     display: flex; gap: 8px; align-items: center;
@@ -107,7 +120,7 @@
   }
 
   .controls {
-    padding: 10px 16px 16px; background: #fff;
+    padding: 10px 16px 14px; background: #fff;
     display: flex; justify-content: center; align-items: center; gap: 14px;
   }
   #langToggle {
@@ -115,14 +128,12 @@
     background: #fff; color: #764ba2; font-weight: 700; font-size: 13px;
     cursor: pointer; min-width: 70px;
   }
-  #langToggle:hover { background: #f3eeff; }
   #micBtn {
-    width: 68px; height: 68px; border-radius: 50%; border: none;
+    width: 66px; height: 66px; border-radius: 50%; border: none;
     background: linear-gradient(135deg, #667eea, #764ba2);
-    color: #fff; font-size: 30px; cursor: pointer;
+    color: #fff; font-size: 28px; cursor: pointer;
     box-shadow: 0 6px 16px rgba(118,75,162,0.4);
     display: flex; justify-content: center; align-items: center;
-    transition: transform 0.15s;
   }
   #micBtn:hover { transform: scale(1.05); }
   #micBtn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -132,23 +143,31 @@
   }
 
   #statusBar {
-    position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.78); color: #fff;
+    position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); color: #fff;
     padding: 8px 16px; border-radius: 20px; font-size: 13px;
     opacity: 0; transition: opacity 0.3s; pointer-events: none;
-    white-space: nowrap; max-width: 90%;
+    white-space: nowrap; max-width: 90%; z-index: 10;
   }
   #statusBar.show { opacity: 1; }
+
+  /* панель отладки */
+  #debugPanel {
+    display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1;
+    font-family: monospace; font-size: 11px; max-height: 100px;
+    overflow-y: auto; line-height: 1.4;
+  }
+  #debugPanel.show { display: block; }
+  #debugPanel .err { color: #f38ba8; }
+  #debugPanel .info { color: #89b4fa; }
 </style>
 </head>
 <body>
 <div class="card">
 
-  <!-- ========== SETUP ========== -->
   <div id="setupScreen">
     <h1>👩‍🏫 Emma</h1>
     <p class="subtitle">Твой голосовой репетитор английского</p>
-
     <div id="warning"></div>
 
     <div class="field">
@@ -176,7 +195,6 @@
     <button id="startBtn">Начать общение 💬</button>
   </div>
 
-  <!-- ========== CHAT ========== -->
   <div id="chatScreen">
     <header>
       <div class="avatar" id="avatar">👩‍🏫</div>
@@ -185,10 +203,18 @@
         <div class="status" id="emmaStatus">Онлайн</div>
       </div>
       <button class="icon-btn" id="muteBtn" title="Голос Emma">🔊</button>
+      <button class="icon-btn" id="debugBtn" title="Отладка">🐞</button>
       <button class="icon-btn" id="resetBtn" title="Заново">↻</button>
     </header>
 
     <div id="chatLog"></div>
+
+    <div id="levelWrap">
+      <span class="lbl">Уровень микрофона</span>
+      <div id="levelBar"><div id="levelFill"></div></div>
+    </div>
+
+    <div id="debugPanel"></div>
 
     <div class="input-row">
       <input type="text" id="textInput" placeholder="Или напиши сообщение...">
@@ -222,15 +248,18 @@ let nativeLang   = 'Russian';
 let history      = [];
 let isMuted      = false;
 let isBusy       = false;
-let micPermissionGranted = false;
-let inputLangMode = 'learn'; // 'learn' | 'native'
+let micStream    = null;
+let audioCtx     = null;
+let analyser     = null;
+let levelRAF     = null;
+let inputLangMode = 'learn';
+let recognitionActive = false;
 
 const LANG_CODES = {
   'English': 'en-US', 'Spanish': 'es-ES', 'German': 'de-DE',
   'French': 'fr-FR', 'Italian': 'it-IT',
   'Russian': 'ru-RU', 'Ukrainian': 'uk-UA', 'Kazakh': 'kk-KZ'
 };
-
 const LANG_SHORT = {
   'English':'EN','Spanish':'ES','German':'DE','French':'FR',
   'Italian':'IT','Russian':'RU','Ukrainian':'UA','Kazakh':'KZ'
@@ -239,25 +268,43 @@ const LANG_SHORT = {
 /* =========================================================
    DOM
    ========================================================= */
-const setupScreen  = document.getElementById('setupScreen');
-const chatScreen   = document.getElementById('chatScreen');
-const startBtn     = document.getElementById('startBtn');
-const learnLangSel = document.getElementById('learnLang');
-const nativeLangSel= document.getElementById('nativeLang');
-const chatLog      = document.getElementById('chatLog');
-const micBtn       = document.getElementById('micBtn');
-const muteBtn      = document.getElementById('muteBtn');
-const resetBtn     = document.getElementById('resetBtn');
-const avatar       = document.getElementById('avatar');
-const emmaStatus   = document.getElementById('emmaStatus');
-const statusBar    = document.getElementById('statusBar');
-const textInput    = document.getElementById('textInput');
-const sendBtn      = document.getElementById('sendBtn');
-const langToggle   = document.getElementById('langToggle');
-const warningBox   = document.getElementById('warning');
+const $ = id => document.getElementById(id);
+const setupScreen  = $('setupScreen');
+const chatScreen   = $('chatScreen');
+const startBtn     = $('startBtn');
+const learnLangSel = $('learnLang');
+const nativeLangSel= $('nativeLang');
+const chatLog      = $('chatLog');
+const micBtn       = $('micBtn');
+const muteBtn      = $('muteBtn');
+const resetBtn     = $('resetBtn');
+const debugBtn     = $('debugBtn');
+const avatar       = $('avatar');
+const emmaStatus   = $('emmaStatus');
+const statusBar    = $('statusBar');
+const textInput    = $('textInput');
+const sendBtn      = $('sendBtn');
+const langToggle   = $('langToggle');
+const warningBox   = $('warning');
+const levelWrap    = $('levelWrap');
+const levelFill    = $('levelFill');
+const debugPanel   = $('debugPanel');
 
 /* =========================================================
-   ПРОВЕРКА ОКРУЖЕНИЯ
+   ОТЛАДКА
+   ========================================================= */
+function log(msg, kind = 'info') {
+  const line = document.createElement('div');
+  line.className = kind;
+  line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  debugPanel.appendChild(line);
+  debugPanel.scrollTop = debugPanel.scrollHeight;
+  console.log(msg);
+}
+debugBtn.addEventListener('click', () => debugPanel.classList.toggle('show'));
+
+/* =========================================================
+   ПРОВЕРКИ
    ========================================================= */
 const isSecure = location.protocol === 'https:' ||
                  location.hostname === 'localhost' ||
@@ -267,11 +314,10 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 
 if (!isSecure) {
   warningBox.style.display = 'block';
-  warningBox.innerHTML = '⚠️ Ты открыл файл как <b>file://</b> — микрофон работать не будет.<br>' +
-    'Запусти в терминале: <code>python -m http.server 8000</code><br>' +
+  warningBox.innerHTML = '⚠️ Открыт файл как <b>file://</b> — микрофон работать не будет.<br>' +
+    'В терминале: <code>python -m http.server 8000</code><br>' +
     'и открой <b>http://localhost:8000</b>';
 }
-
 if (!SpeechRecognition) {
   warningBox.style.display = 'block';
   warningBox.innerHTML += '<br>⚠️ Браузер не поддерживает распознавание речи. Используй Chrome или Edge.';
@@ -280,8 +326,9 @@ if (!SpeechRecognition) {
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 if (recognition) {
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true;   // важно: получаем промежуточные результаты
   recognition.maxAlternatives = 1;
+  recognition.lang = 'en-US';
 }
 
 const synth = window.speechSynthesis;
@@ -290,15 +337,15 @@ const synth = window.speechSynthesis;
    ЖЕНСКИЙ ГОЛОС
    ========================================================= */
 let femaleVoice = null;
-
 function pickFemaleVoice() {
   const voices = synth.getVoices();
   if (!voices.length) return;
   const langCode = (LANG_CODES[learningLang] || 'en-US').split('-')[0];
   const byLang = voices.filter(v => v.lang.toLowerCase().startsWith(langCode));
-  const femaleNames = ['female','woman','zira','samantha','victoria','karen','moira','tessa','google uk english female','google us english','google русский','milena','yelda','alice','elsa','paulina','lucia','katya'];
+  const femaleNames = ['female','woman','zira','samantha','victoria','karen','moira','tessa','google uk english female','google us english','milena','yelda','alice','elsa','paulina','lucia','katya'];
   const isFemale = v => femaleNames.some(n => v.name.toLowerCase().includes(n));
   femaleVoice = byLang.find(isFemale) || byLang[0] || voices.find(isFemale) || voices[0];
+  log('Голос Emma: ' + (femaleVoice ? femaleVoice.name : 'не найден'));
 }
 synth.onvoiceschanged = pickFemaleVoice;
 pickFemaleVoice();
@@ -318,111 +365,171 @@ startBtn.addEventListener('click', async () => {
 RULES:
 1. Main reply ALWAYS in ${learningLang} (short, 1-3 sentences, natural, friendly).
 2. If user writes/speaks in ${nativeLang} — understand them, but reply in ${learningLang}.
-3. After your main reply, if there's something worth explaining or a new word — add a short note in ${nativeLang} in this exact format on a new line:
+3. After your main reply, if worth explaining or a new word — add a short note in ${nativeLang} on a new line in EXACT format:
 [${nativeLang}] твоё краткое пояснение или перевод.
 
-4. If the user made a grammar/vocab mistake, gently correct it inside the note in ${nativeLang}, e.g.:
-[${nativeLang}] Небольшая правка: "I goed" → "I went".
-
+4. If the user made a grammar/vocab mistake, gently correct it inside the note in ${nativeLang}.
 5. ALWAYS end with a short follow-up question in ${learningLang}.
 6. Talk about everyday things: day, hobbies, food, travel, movies, dreams.
 7. Never say you're an AI. You are Emma.`
   }];
 
   pickFemaleVoice();
-
   setupScreen.style.display = 'none';
   chatScreen.style.display  = 'flex';
-
   addMsg('system', `Ты изучаешь ${learningLang}. Emma говорит на ${learningLang} и поясняет на ${nativeLang}.`);
   updateLangToggle();
 
-  // Заранее просим доступ к микрофону
-  await requestMic();
+  log('Язык: ' + learningLang + ' / родной: ' + nativeLang);
+  await initMic();
 
   greetUser();
 });
 
 /* =========================================================
-   ДОСТУП К МИКРОФОНУ
+   ИНИЦИАЛИЗАЦИЯ МИКРОФОНА + ИНДИКАТОР УРОВНЯ
    ========================================================= */
-async function requestMic() {
-  if (micPermissionGranted) return true;
+async function initMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    log('getUserMedia не поддерживается', 'err');
+    setStatus('Браузер не даёт доступ к микрофону API', true);
+    return false;
+  }
+  if (micStream) return true;
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(t => t.stop());
-    micPermissionGranted = true;
-    setStatus('Микрофон разрешён ✓', true);
-    setTimeout(() => setStatus(''), 1800);
+    log('Запрашиваю доступ к микрофону...');
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    log('✓ Доступ к микрофону получен', 'info');
+
+    // индикатор уровня
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    levelWrap.classList.add('show');
+    startLevelMeter();
+
     return true;
   } catch (e) {
-    console.warn('Mic permission error:', e);
-    let msg = 'Не удалось получить доступ к микрофону.';
-    if (e.name === 'NotAllowedError') msg = 'Ты запретил доступ к микрофону. Разреши его в настройках сайта.';
-    if (e.name === 'NotFoundError') msg = 'Микрофон не найден.';
-    if (e.name === 'NotReadableError') msg = 'Микрофон занят другим приложением.';
-    setStatus(msg, true);
+    log('✗ Ошибка микрофона: ' + e.name + ' — ' + e.message, 'err');
+    let m = 'Не удалось получить доступ к микрофону: ' + e.name;
+    if (e.name === 'NotAllowedError') m = 'Ты запретил доступ к микрофону. Разреши в настройках сайта.';
+    if (e.name === 'NotFoundError')   m = 'Микрофон не найден.';
+    if (e.name === 'NotReadableError')m = 'Микрофон занят другим приложением.';
+    setStatus(m, true);
     setTimeout(() => setStatus(''), 4000);
     return false;
   }
+}
+
+function startLevelMeter() {
+  const data = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = Math.abs(data[i] - 128);
+      if (v > peak) peak = v;
+    }
+    const pct = Math.min(100, Math.round(peak / 128 * 100 * 2.5));
+    levelFill.style.width = pct + '%';
+    levelRAF = requestAnimationFrame(tick);
+  };
+  tick();
 }
 
 /* =========================================================
    ПРИВЕТСТВИЕ
    ========================================================= */
 async function greetUser() {
-  setStatus('Emma думает...');
-  const reply = await askAI('(The user just joined. Greet them warmly in ' + learningLang + ' and ask one simple question. Include a short [${nativeLang}] line with translation.)');
+  setStatus('Emma думает...', true);
+  const reply = await askAI('(The user just joined. Greet them warmly in ' + learningLang + ' and ask one simple question. Include a short [' + nativeLang + '] line with translation.)');
   renderBotMessage(reply);
   await speak(reply);
 }
 
 /* =========================================================
-   МИКРОФОН — обработчики
+   МИКРОФОН — нажатие кнопки
    ========================================================= */
 micBtn.addEventListener('click', async () => {
   if (isBusy || !recognition) return;
-  const ok = await requestMic();
+
+  if (recognitionActive) {
+    try { recognition.stop(); } catch(e){}
+    return;
+  }
+
+  const ok = await initMic();
   if (!ok) return;
+
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+  recognition.lang = LANG_CODES[inputLangMode === 'learn' ? learningLang : nativeLang] || 'en-US';
+  log('Старт распознавания, язык: ' + recognition.lang);
+
   try {
-    recognition.lang = LANG_CODES[
-      inputLangMode === 'learn' ? learningLang : nativeLang
-    ] || 'en-US';
     recognition.start();
   } catch (e) {
-    console.warn(e);
+    log('Ошибка start(): ' + e.message, 'err');
   }
 });
 
 if (recognition) {
   recognition.onstart = () => {
+    recognitionActive = true;
     micBtn.classList.add('listening');
     micBtn.textContent = '⏹';
-    setStatus('Слушаю...', true);
+    setStatus('Слушаю... говори', true);
+    log('✓ Распознавание запущено', 'info');
   };
 
   recognition.onend = () => {
+    recognitionActive = false;
     micBtn.classList.remove('listening');
     micBtn.textContent = '🎤';
+    log('Распознавание завершено');
     if (!isBusy) setStatus('');
   };
 
+  recognition.onaudiostart = () => log('→ Захват аудио начался');
+  recognition.onsoundstart = () => { log('→ Звук обнаружен'); setStatus('Слышу звук...', true); };
+  recognition.onspeechstart = () => { log('→ Распознаётся речь'); setStatus('Распознаю речь...', true); };
+  recognition.onspeechend = () => log('→ Речь закончилась');
+  recognition.onsoundend = () => log('→ Звук закончился');
+
   recognition.onerror = (e) => {
-    console.warn('STT error:', e.error);
+    recognitionActive = false;
     micBtn.classList.remove('listening');
     micBtn.textContent = '🎤';
-    let m = 'Ошибка распознавания: ' + e.error;
+    log('✗ STT ошибка: ' + e.error, 'err');
+    let m = 'Ошибка: ' + e.error;
     if (e.error === 'not-allowed') m = 'Доступ к микрофону запрещён.';
-    if (e.error === 'no-speech') m = 'Речь не распознана, попробуй снова.';
-    if (e.error === 'network') m = 'Проблема с сетью. Проверь интернет.';
-    setStatus(m, true);
-    setTimeout(() => setStatus(''), 3000);
+    if (e.error === 'no-speech')   m = 'Речь не распознана, попробуй ещё раз и говори чётче.';
+    if (e.error === 'network')     m = '⚠️ Сервис распознавания Google недоступен. Похоже, провайдер/сеть блокирует. Попробуй VPN или текстовое поле.';
+    if (e.error === 'aborted')     m = '';
+    if (m) { setStatus(m, true); setTimeout(() => setStatus(''), 5000); }
   };
 
   recognition.onresult = async (event) => {
-    const userText = event.results[0][0].transcript.trim();
-    if (!userText) return;
-    await handleUserMessage(userText);
+    let finalText = '';
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    if (interim) {
+      setStatus('🎙 ' + interim, true);
+      log('Промежуточно: ' + interim);
+    }
+    if (finalText.trim()) {
+      log('✓ Финальный текст: ' + finalText);
+      await handleUserMessage(finalText.trim());
+    }
   };
 }
 
@@ -435,9 +542,7 @@ sendBtn.addEventListener('click', () => {
   textInput.value = '';
   handleUserMessage(t);
 });
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendBtn.click();
-});
+textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendBtn.click(); });
 
 /* =========================================================
    ОБРАБОТКА СООБЩЕНИЯ
@@ -462,7 +567,7 @@ async function handleUserMessage(userText) {
 }
 
 /* =========================================================
-   GROQ API
+   GROQ
    ========================================================= */
 async function askAI(extraPrompt) {
   const messages = extraPrompt
@@ -476,52 +581,41 @@ async function askAI(extraPrompt) {
         'Authorization': 'Bearer ' + API_KEY,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        temperature: 0.85,
-        max_tokens: 260
-      })
+      body: JSON.stringify({ model: MODEL, messages, temperature: 0.85, max_tokens: 260 })
     });
     if (!res.ok) {
       const err = await res.text();
-      console.error('Groq error:', err);
+      log('Groq HTTP ' + res.status + ': ' + err.slice(0,150), 'err');
       return 'Sorry, I had a problem thinking. Try again.';
     }
     const data = await res.json();
     return data.choices[0].message.content.trim();
   } catch (e) {
-    console.error(e);
+    log('Groq fetch error: ' + e.message, 'err');
     return 'Sorry, no connection. Check the internet.';
   }
 }
 
 /* =========================================================
-   РЕНДЕР СООБЩЕНИЯ EMMA (с русским пояснением)
+   РЕНДЕР (с русской сноской)
    ========================================================= */
 function renderBotMessage(raw) {
-  // Разбиваем ответ по строке с [Русский] или [<native>]
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  const mainLines = [];
-  const noteLines = [];
-
+  const mainLines = [], noteLines = [];
   const noteRe = new RegExp('^\\[' + nativeLang + '\\]\\s*', 'i');
   for (const line of lines) {
     if (noteRe.test(line)) noteLines.push(line.replace(noteRe, ''));
     else mainLines.push(line);
   }
-
   const div = document.createElement('div');
   div.className = 'msg bot';
   div.textContent = mainLines.join(' ') || raw;
-
   if (noteLines.length) {
     const tr = document.createElement('span');
     tr.className = 'translation';
     tr.textContent = '🇷🇺 ' + noteLines.join(' ');
     div.appendChild(tr);
   }
-
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
@@ -532,55 +626,33 @@ function renderBotMessage(raw) {
 function speak(text) {
   return new Promise((resolve) => {
     if (isMuted || !text) { resolve(); return; }
-
     synth.cancel();
-
-    // Убираем русскую сноску [Русский]... — её читать не нужно
     const noteRe = new RegExp('\\[' + nativeLang + '\\][^\\n]*', 'gi');
-    let spoken = text.replace(noteRe, '').trim();
-    // Убираем (Correct: ...) на всякий случай
-    spoken = spoken.replace(/\(Correct:[^)]*\)/gi, '').trim();
-
+    let spoken = text.replace(noteRe, '').replace(/\(Correct:[^)]*\)/gi, '').trim();
     if (!spoken) { resolve(); return; }
 
     const u = new SpeechSynthesisUtterance(spoken);
     u.lang = LANG_CODES[learningLang] || 'en-US';
-    u.rate = 0.95;
-    u.pitch = 1.15;
-    u.volume = 1;
+    u.rate = 0.95; u.pitch = 1.15; u.volume = 1;
     if (femaleVoice) u.voice = femaleVoice;
-
-    u.onstart = () => {
-      avatar.classList.add('speaking');
-      emmaStatus.textContent = 'Говорит...';
-    };
-    u.onend = () => {
-      avatar.classList.remove('speaking');
-      emmaStatus.textContent = 'Онлайн';
-      resolve();
-    };
-    u.onerror = () => {
-      avatar.classList.remove('speaking');
-      emmaStatus.textContent = 'Онлайн';
-      resolve();
-    };
-
+    u.onstart = () => { avatar.classList.add('speaking'); emmaStatus.textContent = 'Говорит...'; };
+    u.onend   = () => { avatar.classList.remove('speaking'); emmaStatus.textContent = 'Онлайн'; resolve(); };
+    u.onerror = () => { avatar.classList.remove('speaking'); emmaStatus.textContent = 'Онлайн'; resolve(); };
     synth.speak(u);
   });
 }
 
 /* =========================================================
-   ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА ВВОДА
+   ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА
    ========================================================= */
 function updateLangToggle() {
-  const label = inputLangMode === 'learn'
-    ? LANG_SHORT[learningLang] + ' 🎤'
-    : LANG_SHORT[nativeLang] + ' 🎤';
-  langToggle.textContent = label;
+  langToggle.textContent = (inputLangMode === 'learn'
+    ? LANG_SHORT[learningLang] : LANG_SHORT[nativeLang]) + ' 🎤';
 }
 langToggle.addEventListener('click', () => {
   inputLangMode = inputLangMode === 'learn' ? 'native' : 'learn';
   updateLangToggle();
+  log('Язык ввода: ' + (inputLangMode === 'learn' ? learningLang : nativeLang));
   setStatus('Язык ввода: ' + (inputLangMode === 'learn' ? learningLang : nativeLang), true);
   setTimeout(() => setStatus(''), 1800);
 });
@@ -595,7 +667,6 @@ function addMsg(type, text) {
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
-
 let statusTimer = null;
 function setStatus(text, persist = false) {
   clearTimeout(statusTimer);
@@ -604,14 +675,12 @@ function setStatus(text, persist = false) {
   statusBar.classList.add('show');
   if (!persist) statusTimer = setTimeout(() => statusBar.classList.remove('show'), 2000);
 }
-
 muteBtn.addEventListener('click', () => {
   isMuted = !isMuted;
   muteBtn.textContent = isMuted ? '🔇' : '🔊';
   muteBtn.classList.toggle('muted', isMuted);
   if (isMuted) synth.cancel();
 });
-
 resetBtn.addEventListener('click', () => {
   synth.cancel();
   history = history.slice(0, 1);
