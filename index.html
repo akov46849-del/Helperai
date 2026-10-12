@@ -8,8 +8,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; color: #333; }
   .card { background: #fff; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); width: 100%; max-width: 460px; overflow: hidden; display: flex; flex-direction: column; height: 95vh; max-height: 820px; }
-  
-  #setupScreen { padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; justify-content: center; height: 100%; overflow-y: auto; }
+  #setupScreen { padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; justify-content: center; height: 100%; overflow-y: auto; }
   #setupScreen h1 { font-size: 24px; text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
   #setupScreen p.subtitle { text-align: center; color: #888; font-size: 14px; margin-top: -10px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
@@ -37,6 +36,7 @@
   .msg.bot  { align-self: flex-start; background: #fff; color: #333; border: 1px solid #e6e6ee; border-bottom-left-radius: 4px; }
   .msg.system { align-self: center; background: transparent; color: #999; font-size: 12px; font-style: italic; padding: 4px; }
   .msg .translation { display: block; margin-top: 6px; font-size: 13px; color: #7a5cff; font-style: italic; }
+  .msg .speaker { display: inline-block; background: #f0ecff; color: #764ba2; border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 13px; margin-top: 6px; cursor: pointer; padding: 0; }
 
   #levelWrap { display: none; padding: 6px 14px; background: #fff; border-top: 1px solid #eee; align-items: center; gap: 8px; }
   #levelWrap.show { display: flex; }
@@ -62,6 +62,7 @@
   #debugPanel.show { display: block; }
   #debugPanel .err { color: #f38ba8; }
   #debugPanel .info { color: #89b4fa; }
+  #debugPanel .warn { color: #f9e2af; }
 </style>
 </head>
 <body>
@@ -69,7 +70,7 @@
 
   <div id="setupScreen">
     <h1>👩‍🏫 Emma</h1>
-    <p class="subtitle">Твой голосовой репетитор английского</p>
+    <p class="subtitle">Твой голосовой репетитор</p>
     <div id="warning"></div>
 
     <div class="field">
@@ -91,6 +92,16 @@
         <option value="Kazakh">Қазақша</option>
         <option value="English">English</option>
         <option value="Spanish">Español</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="levelSel">Уровень языка</label>
+      <select id="levelSel">
+        <option value="Beginner">🟢 Beginner — только начинаю</option>
+        <option value="Elementary">🔵 Elementary — знаю базу</option>
+        <option value="Intermediate" selected>🟣 Intermediate — могу общаться</option>
+        <option value="Advanced">🔴 Advanced — хочу свободно</option>
       </select>
     </div>
 
@@ -141,7 +152,6 @@
 const API_KEY = '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';
 const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
-// ⚠️ ВАЖНО: llama-3.3-70b-versatile удалён 16.08.2026. Используем актуальную модель.
 const MODEL   = 'openai/gpt-oss-120b';
 const STT_MODEL = 'whisper-large-v3-turbo';
 
@@ -150,6 +160,7 @@ const STT_MODEL = 'whisper-large-v3-turbo';
    ========================================================= */
 let learningLang = 'English';
 let nativeLang   = 'Russian';
+let level        = 'Intermediate';
 let history      = [];
 let isMuted      = false;
 let isBusy       = false;
@@ -161,6 +172,7 @@ let inputLangMode = 'learn';
 let mediaRecorder = null;
 let audioChunks  = [];
 let isRecording  = false;
+let speechUnlocked = false;
 
 const LANG_CODES = {
   'English': 'en-US', 'Spanish': 'es-ES', 'German': 'de-DE',
@@ -172,6 +184,13 @@ const LANG_SHORT = {
   'Italian':'IT','Russian':'RU','Ukrainian':'UA','Kazakh':'KZ'
 };
 
+const LEVEL_PROMPT = {
+  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Speak slowly. Repeat key words. Use present simple. Avoid all idioms, phrasal verbs, complex grammar. Example: "I like cats. Do you like cats?"`,
+  'Elementary': `User level: ELEMENTARY (A2). Use simple everyday words. Sentences of 5-8 words. Present and past simple, basic future. Simple questions. Avoid idioms and slang.`,
+  'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday English. Full sentences. Mix of tenses. Some common idioms are OK. Natural pace.`,
+  'Advanced': `User level: ADVANCED (B2-C1). Speak like a native friend. Use idioms, phrasal verbs, natural expressions, varied grammar. Ask interesting open-ended questions.`
+};
+
 /* =========================================================
    DOM
    ========================================================= */
@@ -181,6 +200,7 @@ const chatScreen   = $('chatScreen');
 const startBtn     = $('startBtn');
 const learnLangSel = $('learnLang');
 const nativeLangSel= $('nativeLang');
+const levelSel     = $('levelSel');
 const chatLog      = $('chatLog');
 const micBtn       = $('micBtn');
 const muteBtn      = $('muteBtn');
@@ -226,6 +246,24 @@ if (!isSecure) {
 const synth = window.speechSynthesis;
 
 /* =========================================================
+   РАЗБЛОКИРОВКА ОЗВУЧКИ НА iOS/Safari
+   ========================================================= */
+function unlockSpeech() {
+  if (speechUnlocked) return;
+  try {
+    // Пустая короткая фраза — она "разбудит" движок внутри пользовательского жеста
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    u.rate = 10;
+    synth.speak(u);
+    speechUnlocked = true;
+    log('🔊 Озвучка разблокирована', 'info');
+  } catch (e) {
+    log('unlockSpeech error: ' + e.message, 'warn');
+  }
+}
+
+/* =========================================================
    ЖЕНСКИЙ ГОЛОС
    ========================================================= */
 let femaleVoice = null;
@@ -237,7 +275,7 @@ function pickFemaleVoice() {
   const femaleNames = ['female','woman','zira','samantha','victoria','karen','moira','tessa','google uk english female','google us english','milena','yelda','alice','elsa','paulina','lucia','katya'];
   const isFemale = v => femaleNames.some(n => v.name.toLowerCase().includes(n));
   femaleVoice = byLang.find(isFemale) || byLang[0] || voices.find(isFemale) || voices[0];
-  log('Голос Emma: ' + (femaleVoice ? femaleVoice.name : 'не найден'));
+  log('Голос Emma: ' + (femaleVoice ? femaleVoice.name + ' (' + femaleVoice.lang + ')' : 'не найден'), femaleVoice ? 'info' : 'warn');
 }
 synth.onvoiceschanged = pickFemaleVoice;
 pickFemaleVoice();
@@ -246,13 +284,19 @@ pickFemaleVoice();
    СТАРТ
    ========================================================= */
 startBtn.addEventListener('click', async () => {
+  // Разблокировать озвучку прямо в обработчике клика — критично для iOS!
+  unlockSpeech();
+
   learningLang = learnLangSel.value;
   nativeLang   = nativeLangSel.value;
+  level        = levelSel.value;
 
   history = [{
     role: 'system',
     content:
 `You are Emma, a warm and friendly female ${learningLang} tutor. The user's native language is ${nativeLang}.
+
+${LEVEL_PROMPT[level] || ''}
 
 RULES:
 1. Main reply ALWAYS in ${learningLang} (short, 1-3 sentences, natural, friendly).
@@ -269,10 +313,10 @@ RULES:
   pickFemaleVoice();
   setupScreen.style.display = 'none';
   chatScreen.style.display  = 'flex';
-  addMsg('system', `Ты изучаешь ${learningLang}. Emma говорит на ${learningLang} и поясняет на ${nativeLang}.`);
+  addMsg('system', `Ты изучаешь ${learningLang} на уровне ${level}. Emma говорит на ${learningLang} и поясняет на ${nativeLang}.`);
   updateLangToggle();
 
-  log('Язык: ' + learningLang + ' / родной: ' + nativeLang);
+  log('Язык: ' + learningLang + ' / родной: ' + nativeLang + ' / уровень: ' + level);
   await initMic();
 
   greetUser();
@@ -296,7 +340,6 @@ async function initMic() {
     });
     log('✓ Доступ к микрофону получен', 'info');
 
-    // индикатор уровня
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioCtx.createMediaStreamSource(micStream);
     analyser = audioCtx.createAnalyser();
@@ -342,10 +385,11 @@ async function greetUser() {
   const reply = await askAI('(The user just joined. Greet them warmly in ' + learningLang + ' and ask one simple question. Include a short [' + nativeLang + '] line with translation.)');
   renderBotMessage(reply);
   await speak(reply);
+  setStatus('');
 }
 
 /* =========================================================
-   ЗАПИСЬ ГОЛОСА (MediaRecorder) — НАДЕЖНЫЙ СПОСОБ ДЛЯ SAFARI
+   ЗАПИСЬ ГОЛОСА
    ========================================================= */
 async function startRecording() {
   if (!micStream) {
@@ -398,13 +442,14 @@ function stopRecording() {
 }
 
 micBtn.addEventListener('click', () => {
+  unlockSpeech(); // разблокируем озвучку и здесь — на случай, если start ещё не был
   if (isBusy) return;
   if (isRecording) stopRecording();
   else startRecording();
 });
 
 /* =========================================================
-   ОТПРАВКА АУДИО В GROQ WHISPER → ТЕКСТ → EMMA
+   WHISPER
    ========================================================= */
 async function transcribeAndReply(audioBlob, mimeType) {
   isBusy = true;
@@ -522,7 +567,7 @@ async function askAI(extraPrompt) {
 }
 
 /* =========================================================
-   РЕНДЕР (с русской сноской)
+   РЕНДЕР
    ========================================================= */
 function renderBotMessage(raw) {
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
@@ -541,29 +586,76 @@ function renderBotMessage(raw) {
     tr.textContent = '🇷🇺 ' + noteLines.join(' ');
     div.appendChild(tr);
   }
+
+  // маленькая кнопка "проиграть" для озвучки конкретного сообщения
+  const spk = document.createElement('button');
+  spk.className = 'speaker';
+  spk.textContent = '🔊';
+  spk.title = 'Озвучить';
+  spk.addEventListener('click', () => { unlockSpeech(); speak(mainLines.join(' ') || raw); });
+  div.appendChild(spk);
+
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
 /* =========================================================
-   ОЗВУЧКА
+   ОЗВУЧКА (с таймаутом-страховкой и логами)
    ========================================================= */
 function speak(text) {
   return new Promise((resolve) => {
     if (isMuted || !text) { resolve(); return; }
-    synth.cancel();
+
+    try { synth.cancel(); } catch(e) {}
+
+    // Убираем русскую сноску и (Correct: ...)
     const noteRe = new RegExp('\\[' + nativeLang + '\\][^\\n]*', 'gi');
     let spoken = text.replace(noteRe, '').replace(/\(Correct:[^)]*\)/gi, '').trim();
     if (!spoken) { resolve(); return; }
 
     const u = new SpeechSynthesisUtterance(spoken);
     u.lang = LANG_CODES[learningLang] || 'en-US';
-    u.rate = 0.95; u.pitch = 1.15; u.volume = 1;
+    u.rate = level === 'Beginner' ? 0.8 : level === 'Elementary' ? 0.9 : 0.95;
+    u.pitch = 1.15;
+    u.volume = 1;
     if (femaleVoice) u.voice = femaleVoice;
-    u.onstart = () => { avatar.classList.add('speaking'); emmaStatus.textContent = 'Говорит...'; };
-    u.onend   = () => { avatar.classList.remove('speaking'); emmaStatus.textContent = 'Онлайн'; resolve(); };
-    u.onerror = () => { avatar.classList.remove('speaking'); emmaStatus.textContent = 'Онлайн'; resolve(); };
-    synth.speak(u);
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      avatar.classList.remove('speaking');
+      emmaStatus.textContent = 'Онлайн';
+      resolve();
+    };
+
+    u.onstart = () => {
+      log('🔊 Emma говорит: "' + spoken.slice(0, 50) + (spoken.length > 50 ? '...' : '') + '"');
+      avatar.classList.add('speaking');
+      emmaStatus.textContent = 'Говорит...';
+    };
+    u.onend = () => { log('🔊 Озвучка завершена'); finish(); };
+    u.onerror = (e) => { log('✗ Ошибка озвучки: ' + (e.error || 'unknown'), 'err'); finish(); };
+
+    // Таймаут-страховка: не даём зависнуть, если onend не сработал (iOS глючит)
+    const estMs = Math.min(40000, Math.max(4000, spoken.length * 90));
+    setTimeout(() => {
+      if (!done) {
+        log('⚠️ Озвучка не завершилась вовремя, снимаю статус', 'warn');
+        finish();
+      }
+    }, estMs);
+
+    try {
+      synth.speak(u);
+      // На iOS иногда нужно "пнуть" очередь
+      setTimeout(() => {
+        if (synth.paused) synth.resume();
+      }, 100);
+    } catch (e) {
+      log('speak() ошибка: ' + e.message, 'err');
+      finish();
+    }
   });
 }
 
@@ -575,6 +667,7 @@ function updateLangToggle() {
     ? LANG_SHORT[learningLang] : LANG_SHORT[nativeLang]) + ' 🎤';
 }
 langToggle.addEventListener('click', () => {
+  unlockSpeech();
   inputLangMode = inputLangMode === 'learn' ? 'native' : 'learn';
   updateLangToggle();
   log('Язык ввода: ' + (inputLangMode === 'learn' ? learningLang : nativeLang));
@@ -607,6 +700,7 @@ muteBtn.addEventListener('click', () => {
   if (isMuted) synth.cancel();
 });
 resetBtn.addEventListener('click', () => {
+  unlockSpeech();
   synth.cancel();
   history = history.slice(0, 1);
   chatLog.innerHTML = '';
