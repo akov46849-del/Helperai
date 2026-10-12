@@ -50,13 +50,12 @@
   #sendBtn { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; width: 42px; height: 42px; border-radius: 50%; font-size: 18px; cursor: pointer; }
 
   .controls { padding: 10px 16px 14px; background: #fff; display: flex; justify-content: center; align-items: center; gap: 14px; }
-  #langToggle { padding: 8px 14px; border-radius: 20px; border: 2px solid #764ba2; background: #fff; color: #764ba2; font-weight: 700; font-size: 13px; cursor: pointer; min-width: 70px; }
-  #micBtn { width: 66px; height: 66px; border-radius: 50%; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 28px; cursor: pointer; box-shadow: 0 6px 16px rgba(118,75,162,0.4); display: flex; justify-content: center; align-items: center; transition: transform 0.15s; }
+  #micBtn { width: 70px; height: 70px; border-radius: 50%; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 30px; cursor: pointer; box-shadow: 0 6px 16px rgba(118,75,162,0.4); display: flex; justify-content: center; align-items: center; transition: transform 0.15s; }
   #micBtn:hover { transform: scale(1.05); }
   #micBtn:disabled { opacity: 0.5; cursor: not-allowed; }
   #micBtn.recording { background: linear-gradient(135deg, #ff5e7e, #ff2d55); animation: pulse 1s infinite; }
 
-  #statusBar { position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; max-width: 90%; z-index: 10; }
+  #statusBar { position: absolute; bottom: 180px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; max-width: 90%; z-index: 10; }
   #statusBar.show { opacity: 1; }
   #debugPanel { display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 11px; max-height: 100px; overflow-y: auto; line-height: 1.4; }
   #debugPanel.show { display: block; }
@@ -130,14 +129,12 @@
     <div id="debugPanel"></div>
 
     <div class="input-row">
-      <input type="text" id="textInput" placeholder="Или напиши сообщение...">
+      <input type="text" id="textInput" placeholder="Напиши на English или по-русски...">
       <button id="sendBtn">➤</button>
     </div>
 
     <div class="controls">
-      <button id="langToggle" title="Язык ввода">EN 🎤</button>
       <button id="micBtn" title="Нажми, чтобы записать">🎤</button>
-      <span style="width:70px"></span>
     </div>
 
     <div id="statusBar"></div>
@@ -168,7 +165,6 @@ let micStream    = null;
 let audioCtx     = null;
 let analyser     = null;
 let levelRAF     = null;
-let inputLangMode = 'learn';
 let mediaRecorder = null;
 let audioChunks  = [];
 let isRecording  = false;
@@ -179,14 +175,10 @@ const LANG_CODES = {
   'French': 'fr-FR', 'Italian': 'it-IT',
   'Russian': 'ru-RU', 'Ukrainian': 'uk-UA', 'Kazakh': 'kk-KZ'
 };
-const LANG_SHORT = {
-  'English':'EN','Spanish':'ES','German':'DE','French':'FR',
-  'Italian':'IT','Russian':'RU','Ukrainian':'UA','Kazakh':'KZ'
-};
 
 const LEVEL_PROMPT = {
-  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Speak slowly. Repeat key words. Use present simple. Avoid all idioms, phrasal verbs, complex grammar. Example: "I like cats. Do you like cats?"`,
-  'Elementary': `User level: ELEMENTARY (A2). Use simple everyday words. Sentences of 5-8 words. Present and past simple, basic future. Simple questions. Avoid idioms and slang.`,
+  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Speak slowly. Repeat key words. Present simple only. No idioms, no phrasal verbs, no complex grammar.`,
+  'Elementary': `User level: ELEMENTARY (A2). Simple everyday words. Sentences of 5-8 words. Present and past simple, basic future. Simple questions. Avoid idioms and slang.`,
   'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday English. Full sentences. Mix of tenses. Some common idioms are OK. Natural pace.`,
   'Advanced': `User level: ADVANCED (B2-C1). Speak like a native friend. Use idioms, phrasal verbs, natural expressions, varied grammar. Ask interesting open-ended questions.`
 };
@@ -211,7 +203,6 @@ const emmaStatus   = $('emmaStatus');
 const statusBar    = $('statusBar');
 const textInput    = $('textInput');
 const sendBtn      = $('sendBtn');
-const langToggle   = $('langToggle');
 const warningBox   = $('warning');
 const levelWrap    = $('levelWrap');
 const levelFill    = $('levelFill');
@@ -246,12 +237,11 @@ if (!isSecure) {
 const synth = window.speechSynthesis;
 
 /* =========================================================
-   РАЗБЛОКИРОВКА ОЗВУЧКИ НА iOS/Safari
+   РАЗБЛОКИРОВКА ОЗВУЧКИ (iOS)
    ========================================================= */
 function unlockSpeech() {
   if (speechUnlocked) return;
   try {
-    // Пустая короткая фраза — она "разбудит" движок внутри пользовательского жеста
     const u = new SpeechSynthesisUtterance(' ');
     u.volume = 0;
     u.rate = 10;
@@ -284,7 +274,6 @@ pickFemaleVoice();
    СТАРТ
    ========================================================= */
 startBtn.addEventListener('click', async () => {
-  // Разблокировать озвучку прямо в обработчике клика — критично для iOS!
   unlockSpeech();
 
   learningLang = learnLangSel.value;
@@ -298,23 +287,39 @@ startBtn.addEventListener('click', async () => {
 
 ${LEVEL_PROMPT[level] || ''}
 
-RULES:
-1. Main reply ALWAYS in ${learningLang} (short, 1-3 sentences, natural, friendly).
-2. If user writes/speaks in ${nativeLang} — understand them, but reply in ${learningLang}.
-3. After your main reply, if worth explaining or a new word — add a short note in ${nativeLang} on a new line in EXACT format:
-[${nativeLang}] твоё краткое пояснение или перевод.
+YOUR JOB — detect user's language and respond correctly:
 
-4. If the user made a grammar/vocab mistake, gently correct it inside the note in ${nativeLang}.
-5. ALWAYS end with a short follow-up question in ${learningLang}.
-6. Talk about everyday things: day, hobbies, food, travel, movies, dreams.
-7. Never say you're an AI. You are Emma.`
+CASE A: The user writes/speaks in ${learningLang} (they are practicing).
+→ Reply ONLY in ${learningLang}. Keep it short (1-3 sentences). Continue the conversation naturally.
+→ If there is a grammar/vocabulary mistake, gently fix it in a short note in ${nativeLang} on a new line in this exact format:
+[${nativeLang}] Небольшая правка: "wrong" → "correct".
+
+CASE B: The user writes/speaks in ${nativeLang} (they are asking for help with ${learningLang}).
+→ This means they want to know how to say something in ${learningLang}.
+→ FIRST give the ${learningLang} translation/phrase they need, on its own line.
+→ THEN on a new line add a short note in ${nativeLang} explaining it, in this exact format:
+[${nativeLang}] пояснение.
+
+EXAMPLE — user says: "как сказать я устал?"
+Your reply:
+"I'm tired."
+[${nativeLang}] "I'm tired" — так говорят на английском. Попробуй повторить вслух!
+
+EXAMPLE — user says: "How are you?"
+Your reply:
+"I'm great, thanks for asking! How about you?"
+
+RULES:
+1. Reply ALWAYS ends with a short follow-up question in ${learningLang}, so the conversation keeps going.
+2. Talk about everyday things: day, hobbies, food, travel, movies, dreams, feelings.
+3. Never say you're an AI or a bot. You are Emma.
+4. Keep total reply under 3 short sentences + optional note.`
   }];
 
   pickFemaleVoice();
   setupScreen.style.display = 'none';
   chatScreen.style.display  = 'flex';
-  addMsg('system', `Ты изучаешь ${learningLang} на уровне ${level}. Emma говорит на ${learningLang} и поясняет на ${nativeLang}.`);
-  updateLangToggle();
+  addMsg('system', `Ты изучаешь ${learningLang} на уровне ${level}. Говори с Emma на английском или по-русски — она поймёт.`);
 
   log('Язык: ' + learningLang + ' / родной: ' + nativeLang + ' / уровень: ' + level);
   await initMic();
@@ -323,12 +328,12 @@ RULES:
 });
 
 /* =========================================================
-   ИНИЦИАЛИЗАЦИЯ МИКРОФОНА + ИНДИКАТОР УРОВНЯ
+   МИКРОФОН + ИНДИКАТОР
    ========================================================= */
 async function initMic() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     log('getUserMedia не поддерживается', 'err');
-    setStatus('Браузер не даёт доступ к микрофону API', true);
+    setStatus('Браузер не даёт доступ к микрофону', true);
     return false;
   }
   if (micStream) return true;
@@ -442,14 +447,14 @@ function stopRecording() {
 }
 
 micBtn.addEventListener('click', () => {
-  unlockSpeech(); // разблокируем озвучку и здесь — на случай, если start ещё не был
+  unlockSpeech();
   if (isBusy) return;
   if (isRecording) stopRecording();
   else startRecording();
 });
 
 /* =========================================================
-   WHISPER
+   WHISPER — БЕЗ указания языка, авто-определение
    ========================================================= */
 async function transcribeAndReply(audioBlob, mimeType) {
   isBusy = true;
@@ -460,12 +465,9 @@ async function transcribeAndReply(audioBlob, mimeType) {
     let ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
     formData.append('file', audioBlob, 'recording.' + ext);
     formData.append('model', STT_MODEL);
+    // НЕ передаём language — Whisper сам определит: English или Russian
 
-    const recLang = inputLangMode === 'learn' ? learningLang : nativeLang;
-    const langCode = LANG_CODES[recLang] ? LANG_CODES[recLang].split('-')[0] : 'en';
-    formData.append('language', langCode);
-
-    log('Отправляю в Whisper, язык: ' + langCode);
+    log('Отправляю в Whisper (авто-определение языка)...');
 
     const res = await fetch(STT_URL, {
       method: 'POST',
@@ -587,7 +589,6 @@ function renderBotMessage(raw) {
     div.appendChild(tr);
   }
 
-  // маленькая кнопка "проиграть" для озвучки конкретного сообщения
   const spk = document.createElement('button');
   spk.className = 'speaker';
   spk.textContent = '🔊';
@@ -600,7 +601,7 @@ function renderBotMessage(raw) {
 }
 
 /* =========================================================
-   ОЗВУЧКА (с таймаутом-страховкой и логами)
+   ОЗВУЧКА
    ========================================================= */
 function speak(text) {
   return new Promise((resolve) => {
@@ -608,7 +609,6 @@ function speak(text) {
 
     try { synth.cancel(); } catch(e) {}
 
-    // Убираем русскую сноску и (Correct: ...)
     const noteRe = new RegExp('\\[' + nativeLang + '\\][^\\n]*', 'gi');
     let spoken = text.replace(noteRe, '').replace(/\(Correct:[^)]*\)/gi, '').trim();
     if (!spoken) { resolve(); return; }
@@ -637,7 +637,6 @@ function speak(text) {
     u.onend = () => { log('🔊 Озвучка завершена'); finish(); };
     u.onerror = (e) => { log('✗ Ошибка озвучки: ' + (e.error || 'unknown'), 'err'); finish(); };
 
-    // Таймаут-страховка: не даём зависнуть, если onend не сработал (iOS глючит)
     const estMs = Math.min(40000, Math.max(4000, spoken.length * 90));
     setTimeout(() => {
       if (!done) {
@@ -648,32 +647,13 @@ function speak(text) {
 
     try {
       synth.speak(u);
-      // На iOS иногда нужно "пнуть" очередь
-      setTimeout(() => {
-        if (synth.paused) synth.resume();
-      }, 100);
+      setTimeout(() => { if (synth.paused) synth.resume(); }, 100);
     } catch (e) {
       log('speak() ошибка: ' + e.message, 'err');
       finish();
     }
   });
 }
-
-/* =========================================================
-   ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА
-   ========================================================= */
-function updateLangToggle() {
-  langToggle.textContent = (inputLangMode === 'learn'
-    ? LANG_SHORT[learningLang] : LANG_SHORT[nativeLang]) + ' 🎤';
-}
-langToggle.addEventListener('click', () => {
-  unlockSpeech();
-  inputLangMode = inputLangMode === 'learn' ? 'native' : 'learn';
-  updateLangToggle();
-  log('Язык ввода: ' + (inputLangMode === 'learn' ? learningLang : nativeLang));
-  setStatus('Язык ввода: ' + (inputLangMode === 'learn' ? learningLang : nativeLang), true);
-  setTimeout(() => setStatus(''), 1800);
-});
 
 /* =========================================================
    ВСПОМОГАТЕЛЬНОЕ
