@@ -57,11 +57,12 @@
 
   #statusBar { position: absolute; bottom: 180px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; max-width: 90%; z-index: 10; }
   #statusBar.show { opacity: 1; }
-  #debugPanel { display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 11px; max-height: 100px; overflow-y: auto; line-height: 1.4; }
+  #debugPanel { display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 11px; max-height: 130px; overflow-y: auto; line-height: 1.4; }
   #debugPanel.show { display: block; }
   #debugPanel .err { color: #f38ba8; }
   #debugPanel .info { color: #89b4fa; }
   #debugPanel .warn { color: #f9e2af; }
+  #voiceSelect { margin-top: 6px; width: 100%; padding: 4px; font-size: 11px; background: #2a2a3e; color: #a6e3a1; border: 1px solid #444; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -126,7 +127,10 @@
       <div id="levelBar"><div id="levelFill"></div></div>
     </div>
 
-    <div id="debugPanel"></div>
+    <div id="debugPanel">
+      <div class="info">— Панель отладки. Выбери голос Emma вручную:</div>
+      <select id="voiceSelect"></select>
+    </div>
 
     <div class="input-row">
       <input type="text" id="textInput" placeholder="Напиши на English или по-русски...">
@@ -177,10 +181,10 @@ const LANG_CODES = {
 };
 
 const LEVEL_PROMPT = {
-  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Speak slowly. Repeat key words. Present simple only. No idioms, no phrasal verbs, no complex grammar.`,
-  'Elementary': `User level: ELEMENTARY (A2). Simple everyday words. Sentences of 5-8 words. Present and past simple, basic future. Simple questions. Avoid idioms and slang.`,
-  'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday English. Full sentences. Mix of tenses. Some common idioms are OK. Natural pace.`,
-  'Advanced': `User level: ADVANCED (B2-C1). Speak like a native friend. Use idioms, phrasal verbs, natural expressions, varied grammar. Ask interesting open-ended questions.`
+  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Present simple only. No idioms, no phrasal verbs.`,
+  'Elementary': `User level: ELEMENTARY (A2). Simple everyday words. Sentences of 5-8 words. Present and past simple. Avoid idioms.`,
+  'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday English. Full sentences. Mix of tenses. Some common idioms OK.`,
+  'Advanced': `User level: ADVANCED (B2-C1). Native-like. Idioms, phrasal verbs, natural expressions.`
 };
 
 /* =========================================================
@@ -207,6 +211,7 @@ const warningBox   = $('warning');
 const levelWrap    = $('levelWrap');
 const levelFill    = $('levelFill');
 const debugPanel   = $('debugPanel');
+const voiceSelect  = $('voiceSelect');
 
 /* =========================================================
    ОТЛАДКА
@@ -254,21 +259,116 @@ function unlockSpeech() {
 }
 
 /* =========================================================
-   ЖЕНСКИЙ ГОЛОС
+   ЖЕНСКИЙ ГОЛОС — жёсткая логика для iOS Safari
    ========================================================= */
+// Явные мужские имена — исключаем всегда
+const MALE_NAMES = [
+  'alex','daniel','fred','tom','oliver','thomas','aaron','arthur','gordon',
+  'rishi','diego','jorge','juan','carlos','luca','matteo','yuri','dmitri',
+  'male','man','david','mark','james','john','robert','michael','william',
+  'google uk english male','google us english male','microsoft david','microsoft mark'
+];
+// Явные женские имена — приоритет
+const FEMALE_NAMES = [
+  'samantha','karen','moira','tessa','serena','kate','alison','ava','nicky',
+  'susan','zoe','victoria','fiona','veena','allison','amelie','audrey','anna',
+  'female','woman','zira','milena','yelda','alice','elsa','paulina','lucia',
+  'katya','maria','elena','carmit','damayanti','lekha','rishi'.replace('rishi',''), // редкие
+  'google uk english female','google us english','microsoft zira','microsoft hazel',
+  'microsoft heera','microsoft eva','microsoft sabina'
+];
+
 let femaleVoice = null;
-function pickFemaleVoice() {
-  const voices = synth.getVoices();
-  if (!voices.length) return;
-  const langCode = (LANG_CODES[learningLang] || 'en-US').split('-')[0];
-  const byLang = voices.filter(v => v.lang.toLowerCase().startsWith(langCode));
-  const femaleNames = ['female','woman','zira','samantha','victoria','karen','moira','tessa','google uk english female','google us english','milena','yelda','alice','elsa','paulina','lucia','katya'];
-  const isFemale = v => femaleNames.some(n => v.name.toLowerCase().includes(n));
-  femaleVoice = byLang.find(isFemale) || byLang[0] || voices.find(isFemale) || voices[0];
-  log('Голос Emma: ' + (femaleVoice ? femaleVoice.name + ' (' + femaleVoice.lang + ')' : 'не найден'), femaleVoice ? 'info' : 'warn');
+let allVoices   = [];
+
+function voiceScore(v) {
+  const name = v.name.toLowerCase();
+  const lang = v.lang.toLowerCase();
+
+  // Жёсткое исключение мужских
+  if (MALE_NAMES.some(m => name.includes(m))) return -1000;
+
+  let score = 0;
+
+  // Совпадение языка изучаемого
+  const wantPrefix = (LANG_CODES[learningLang] || 'en-US').split('-')[0];
+  if (lang.startsWith(wantPrefix)) score += 100;
+  // Английский всегда чуть-чуть бонусом
+  if (lang.startsWith('en')) score += 20;
+
+  // Явное женское имя — большой плюс
+  if (FEMALE_NAMES.some(f => name.includes(f))) score += 200;
+
+  // Google/Samantha/Karen/Moira — топ приоритет
+  if (name.includes('samantha') || name.includes('karen') ||
+      name.includes('moira') || name.includes('tessa') ||
+      name.includes('serena') || name.includes('ava') ||
+      name.includes('google uk english female') || name.includes('google us english')) {
+    score += 300;
+  }
+
+  // "enhanced"/"premium" версии — лучше звучат
+  if (name.includes('enhanced') || name.includes('premium')) score += 50;
+
+  return score;
 }
-synth.onvoiceschanged = pickFemaleVoice;
+
+function pickFemaleVoice() {
+  allVoices = synth.getVoices();
+  if (!allVoices.length) {
+    log('Голоса ещё не загружены...', 'warn');
+    return;
+  }
+
+  // Сортируем по score
+  const sorted = [...allVoices].sort((a, b) => voiceScore(b) - voiceScore(a));
+  const top = sorted[0];
+  if (top && voiceScore(top) > 0) {
+    femaleVoice = top;
+  } else {
+    femaleVoice = allVoices[0];
+  }
+
+  // Логируем все голоса, чтобы было видно
+  log('Доступные голоса (' + allVoices.length + '):', 'info');
+  allVoices.forEach(v => {
+    const s = voiceScore(v);
+    const mark = s > 0 ? '✓' : '✗';
+    log('  ' + mark + ' ' + v.name + ' [' + v.lang + '] score=' + s, s > 0 ? 'info' : 'warn');
+  });
+
+  if (femaleVoice) {
+    log('🎤 Выбран голос Emma: ' + femaleVoice.name + ' (' + femaleVoice.lang + ')', 'info');
+  }
+
+  // Заполняем выпадающий список в панели отладки
+  voiceSelect.innerHTML = '';
+  sorted.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name + ' — ' + v.lang + ' (score ' + voiceScore(v) + ')';
+    if (femaleVoice && v.name === femaleVoice.name && v.lang === femaleVoice.lang) {
+      opt.selected = true;
+    }
+    voiceSelect.appendChild(opt);
+  });
+}
+
+synth.onvoiceschanged = () => { log('voiceschanged event'); pickFemaleVoice(); };
 pickFemaleVoice();
+// iOS Safari иногда отдаёт голоса с задержкой — попробуем ещё раз через секунду
+setTimeout(pickFemaleVoice, 1000);
+setTimeout(pickFemaleVoice, 3000);
+
+// Ручной выбор голоса из панели отладки
+voiceSelect.addEventListener('change', () => {
+  const [name, lang] = voiceSelect.value.split(' — ');
+  const found = allVoices.find(v => v.name === name && v.lang === lang.split(' ')[0]);
+  if (found) {
+    femaleVoice = found;
+    log('🎤 Вручную выбран: ' + found.name + ' (' + found.lang + ')', 'info');
+  }
+});
 
 /* =========================================================
    СТАРТ
@@ -295,25 +395,26 @@ CASE A: The user writes/speaks in ${learningLang} (they are practicing).
 [${nativeLang}] Небольшая правка: "wrong" → "correct".
 
 CASE B: The user writes/speaks in ${nativeLang} (they are asking for help with ${learningLang}).
-→ This means they want to know how to say something in ${learningLang}.
-→ FIRST give the ${learningLang} translation/phrase they need, on its own line.
-→ THEN on a new line add a short note in ${nativeLang} explaining it, in this exact format:
+→ They want to know how to say something in ${learningLang}.
+→ FIRST give the ${learningLang} translation on its own line.
+→ THEN on a new line add a short note in ${nativeLang} in this exact format:
 [${nativeLang}] пояснение.
 
 EXAMPLE — user says: "как сказать я устал?"
 Your reply:
 "I'm tired."
-[${nativeLang}] "I'm tired" — так говорят на английском. Попробуй повторить вслух!
+[${nativeLang}] "I'm tired" — так говорят на английском. Повтори вслух!
 
 EXAMPLE — user says: "How are you?"
 Your reply:
 "I'm great, thanks for asking! How about you?"
 
 RULES:
-1. Reply ALWAYS ends with a short follow-up question in ${learningLang}, so the conversation keeps going.
-2. Talk about everyday things: day, hobbies, food, travel, movies, dreams, feelings.
-3. Never say you're an AI or a bot. You are Emma.
-4. Keep total reply under 3 short sentences + optional note.`
+1. Always end with a short follow-up question in ${learningLang}.
+2. Talk about everyday things.
+3. Never say you're an AI. You are Emma.
+4. Keep total reply under 3 short sentences + optional note.
+5. IMPORTANT: Output ONLY the reply text. No labels, no "Emma:", no prefixes.`
   }];
 
   pickFemaleVoice();
@@ -388,8 +489,12 @@ function startLevelMeter() {
 async function greetUser() {
   setStatus('Emma думает...', true);
   const reply = await askAI('(The user just joined. Greet them warmly in ' + learningLang + ' and ask one simple question. Include a short [' + nativeLang + '] line with translation.)');
-  renderBotMessage(reply);
-  await speak(reply);
+  if (reply && reply.trim()) {
+    renderBotMessage(reply);
+    await speak(reply);
+  } else {
+    log('⚠️ Emma вернула пустой ответ на приветствие', 'warn');
+  }
   setStatus('');
 }
 
@@ -454,7 +559,7 @@ micBtn.addEventListener('click', () => {
 });
 
 /* =========================================================
-   WHISPER — БЕЗ указания языка, авто-определение
+   WHISPER (авто-определение языка)
    ========================================================= */
 async function transcribeAndReply(audioBlob, mimeType) {
   isBusy = true;
@@ -465,7 +570,6 @@ async function transcribeAndReply(audioBlob, mimeType) {
     let ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
     formData.append('file', audioBlob, 'recording.' + ext);
     formData.append('model', STT_MODEL);
-    // НЕ передаём language — Whisper сам определит: English или Russian
 
     log('Отправляю в Whisper (авто-определение языка)...');
 
@@ -528,10 +632,23 @@ async function handleUserMessage(userText) {
   setStatus('Emma думает...', true);
 
   const reply = await askAI(null);
-  renderBotMessage(reply);
-  history.push({ role: 'assistant', content: reply });
 
-  await speak(reply);
+  if (!reply || !reply.trim()) {
+    log('⚠️ Emma вернула пустой ответ, пробую ещё раз...', 'warn');
+    // Повторная попытка с другим запросом
+    const retry = await askAI('Please reply to the user\'s last message in ' + learningLang + '.');
+    if (retry && retry.trim()) {
+      renderBotMessage(retry);
+      history.push({ role: 'assistant', content: retry });
+      await speak(retry);
+    } else {
+      addMsg('bot', 'Sorry, I got distracted. Can you say that again?');
+    }
+  } else {
+    renderBotMessage(reply);
+    history.push({ role: 'assistant', content: reply });
+    await speak(reply);
+  }
 
   isBusy = false;
   micBtn.disabled = false;
@@ -539,7 +656,7 @@ async function handleUserMessage(userText) {
 }
 
 /* =========================================================
-   GROQ
+   GROQ — с reasoning_effort low и увеличенным max_tokens
    ========================================================= */
 async function askAI(extraPrompt) {
   const messages = extraPrompt
@@ -547,24 +664,61 @@ async function askAI(extraPrompt) {
     : history;
 
   try {
+    const body = {
+      model: MODEL,
+      messages,
+      temperature: 0.7,
+      max_tokens: 800,          // было 260 — теперь хватит и на reasoning, и на ответ
+      reasoning_effort: 'low'   // gpt-oss: минимум размышлений, максимум ответа
+    };
+
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + API_KEY,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model: MODEL, messages, temperature: 0.85, max_tokens: 260 })
+      body: JSON.stringify(body)
     });
+
     if (!res.ok) {
       const err = await res.text();
-      log('Groq HTTP ' + res.status + ': ' + err.slice(0,150), 'err');
-      return 'Sorry, I had a problem thinking. Try again.';
+      log('Groq HTTP ' + res.status + ': ' + err.slice(0, 200), 'err');
+      return '';
     }
+
     const data = await res.json();
-    return data.choices[0].message.content.trim();
+    const choice = data.choices && data.choices[0];
+    const msg = choice && choice.message;
+
+    // Полный ответ в лог для диагностики
+    log('Groq response: ' + JSON.stringify({
+      finish_reason: choice && choice.finish_reason,
+      content: msg && msg.content ? msg.content.slice(0, 80) : '(empty)',
+      reasoning: msg && msg.reasoning ? '(есть)' : '(нет)',
+      usage: data.usage
+    }), 'info');
+
+    // Основной путь — content
+    let content = (msg && msg.content) ? msg.content.trim() : '';
+
+    // Fallback: если content пуст, но модель успела что-то подумать в reasoning —
+    // часто там есть черновик ответа. Попробуем вытащить последний абзац.
+    if (!content && msg && msg.reasoning) {
+      log('⚠️ content пуст, но есть reasoning — пробую извлечь ответ из него', 'warn');
+      const r = msg.reasoning;
+      // Обычно в reasoning финальная мысль — в конце
+      const parts = r.split(/\n\n+/).filter(p => p.trim().length > 10);
+      content = (parts[parts.length - 1] || r).trim();
+      // Обрезаем до 2 предложений
+      content = content.split(/(?<=[.!?])\s+/).slice(0, 3).join(' ');
+    }
+
+    return content;
+
   } catch (e) {
     log('Groq fetch error: ' + e.message, 'err');
-    return 'Sorry, no connection. Check the internet.';
+    return '';
   }
 }
 
@@ -572,6 +726,8 @@ async function askAI(extraPrompt) {
    РЕНДЕР
    ========================================================= */
 function renderBotMessage(raw) {
+  if (!raw || !raw.trim()) return;
+
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   const mainLines = [], noteLines = [];
   const noteRe = new RegExp('^\\[' + nativeLang + '\\]\\s*', 'i');
@@ -616,9 +772,14 @@ function speak(text) {
     const u = new SpeechSynthesisUtterance(spoken);
     u.lang = LANG_CODES[learningLang] || 'en-US';
     u.rate = level === 'Beginner' ? 0.8 : level === 'Elementary' ? 0.9 : 0.95;
-    u.pitch = 1.15;
+    u.pitch = 1.2;   // выше — женственнее
     u.volume = 1;
-    if (femaleVoice) u.voice = femaleVoice;
+    if (femaleVoice) {
+      u.voice = femaleVoice;
+      log('🎤 Озвучка голосом: ' + femaleVoice.name, 'info');
+    } else {
+      log('⚠️ Женский голос не найден, использую системный', 'warn');
+    }
 
     let done = false;
     const finish = () => {
@@ -630,7 +791,7 @@ function speak(text) {
     };
 
     u.onstart = () => {
-      log('🔊 Emma говорит: "' + spoken.slice(0, 50) + (spoken.length > 50 ? '...' : '') + '"');
+      log('🔊 Emma говорит: "' + spoken.slice(0, 60) + (spoken.length > 60 ? '...' : '') + '"');
       avatar.classList.add('speaking');
       emmaStatus.textContent = 'Говорит...';
     };
