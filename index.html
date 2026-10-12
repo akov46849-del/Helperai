@@ -57,12 +57,12 @@
 
   #statusBar { position: absolute; bottom: 180px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; max-width: 90%; z-index: 10; }
   #statusBar.show { opacity: 1; }
-  #debugPanel { display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 11px; max-height: 130px; overflow-y: auto; line-height: 1.4; }
+  #debugPanel { display: none; padding: 8px 12px; background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 11px; max-height: 160px; overflow-y: auto; line-height: 1.4; }
   #debugPanel.show { display: block; }
   #debugPanel .err { color: #f38ba8; }
   #debugPanel .info { color: #89b4fa; }
   #debugPanel .warn { color: #f9e2af; }
-  #voiceSelect { margin-top: 6px; width: 100%; padding: 4px; font-size: 11px; background: #2a2a3e; color: #a6e3a1; border: 1px solid #444; border-radius: 6px; }
+  #voiceSelectEn, #voiceSelectRu { margin-top: 6px; width: 100%; padding: 4px; font-size: 11px; background: #2a2a3e; color: #a6e3a1; border: 1px solid #444; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -128,8 +128,10 @@
     </div>
 
     <div id="debugPanel">
-      <div class="info">— Панель отладки. Выбери голос Emma вручную:</div>
-      <select id="voiceSelect"></select>
+      <div class="info">— Голос Emma (English):</div>
+      <select id="voiceSelectEn"></select>
+      <div class="info">— Голос Emma (Русский):</div>
+      <select id="voiceSelectRu"></select>
     </div>
 
     <div class="input-row">
@@ -180,10 +182,12 @@ const LANG_CODES = {
   'Russian': 'ru-RU', 'Ukrainian': 'uk-UA', 'Kazakh': 'kk-KZ'
 };
 
+const NATIVE_LANG_CODE = { 'Russian': 'ru', 'Ukrainian': 'uk', 'Kazakh': 'kk' };
+
 const LEVEL_PROMPT = {
-  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max. Present simple only. No idioms, no phrasal verbs.`,
-  'Elementary': `User level: ELEMENTARY (A2). Simple everyday words. Sentences of 5-8 words. Present and past simple. Avoid idioms.`,
-  'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday English. Full sentences. Mix of tenses. Some common idioms OK.`,
+  'Beginner': `User level: BEGINNER (A1). Use VERY simple words only. Sentences of 3-5 words max.`,
+  'Elementary': `User level: ELEMENTARY (A2). Simple everyday words. Sentences of 5-8 words.`,
+  'Intermediate': `User level: INTERMEDIATE (B1). Normal everyday speech. Full sentences.`,
   'Advanced': `User level: ADVANCED (B2-C1). Native-like. Idioms, phrasal verbs, natural expressions.`
 };
 
@@ -211,7 +215,8 @@ const warningBox   = $('warning');
 const levelWrap    = $('levelWrap');
 const levelFill    = $('levelFill');
 const debugPanel   = $('debugPanel');
-const voiceSelect  = $('voiceSelect');
+const voiceSelectEn = $('voiceSelectEn');
+const voiceSelectRu = $('voiceSelectRu');
 
 /* =========================================================
    ОТЛАДКА
@@ -241,9 +246,6 @@ if (!isSecure) {
 
 const synth = window.speechSynthesis;
 
-/* =========================================================
-   РАЗБЛОКИРОВКА ОЗВУЧКИ (iOS)
-   ========================================================= */
 function unlockSpeech() {
   if (speechUnlocked) return;
   try {
@@ -259,115 +261,108 @@ function unlockSpeech() {
 }
 
 /* =========================================================
-   ЖЕНСКИЙ ГОЛОС — жёсткая логика для iOS Safari
+   ГОЛОСА
    ========================================================= */
-// Явные мужские имена — исключаем всегда
 const MALE_NAMES = [
   'alex','daniel','fred','tom','oliver','thomas','aaron','arthur','gordon',
-  'rishi','diego','jorge','juan','carlos','luca','matteo','yuri','dmitri',
+  'rishi','diego','jorge','juan','carlos','luca','matteo','dmitri',
   'male','man','david','mark','james','john','robert','michael','william',
-  'google uk english male','google us english male','microsoft david','microsoft mark'
+  'google uk english male','google us english male','microsoft david','microsoft mark',
+  'yuri','pavel','maxim','andrey','andrei','dmitry','sergey','vladimir','nikolay'
 ];
-// Явные женские имена — приоритет
-const FEMALE_NAMES = [
+const FEMALE_NAMES_EN = [
   'samantha','karen','moira','tessa','serena','kate','alison','ava','nicky',
-  'susan','zoe','victoria','fiona','veena','allison','amelie','audrey','anna',
+  'susan','zoe','victoria','fiona','veena','allison','amelie','audrey',
   'female','woman','zira','milena','yelda','alice','elsa','paulina','lucia',
-  'katya','maria','elena','carmit','damayanti','lekha','rishi'.replace('rishi',''), // редкие
   'google uk english female','google us english','microsoft zira','microsoft hazel',
   'microsoft heera','microsoft eva','microsoft sabina'
 ];
+const FEMALE_NAMES_RU = [
+  'milena','katya','alena','alyona','tatyana','tatiana',
+  'irina','elena','olga','svetlana','natalia','natalya','masha','maria',
+  'google русский','microsoft irina','microsoft svetlana','microsoft daria'
+];
 
-let femaleVoice = null;
-let allVoices   = [];
+let voiceEn = null;
+let voiceRu = null;
+let allVoices = [];
 
-function voiceScore(v) {
+function isMale(v) {
+  const name = v.name.toLowerCase();
+  return MALE_NAMES.some(m => name.includes(m));
+}
+
+function scoreEn(v) {
   const name = v.name.toLowerCase();
   const lang = v.lang.toLowerCase();
-
-  // Жёсткое исключение мужских
-  if (MALE_NAMES.some(m => name.includes(m))) return -1000;
-
-  let score = 0;
-
-  // Совпадение языка изучаемого
-  const wantPrefix = (LANG_CODES[learningLang] || 'en-US').split('-')[0];
-  if (lang.startsWith(wantPrefix)) score += 100;
-  // Английский всегда чуть-чуть бонусом
-  if (lang.startsWith('en')) score += 20;
-
-  // Явное женское имя — большой плюс
-  if (FEMALE_NAMES.some(f => name.includes(f))) score += 200;
-
-  // Google/Samantha/Karen/Moira — топ приоритет
-  if (name.includes('samantha') || name.includes('karen') ||
-      name.includes('moira') || name.includes('tessa') ||
-      name.includes('serena') || name.includes('ava') ||
-      name.includes('google uk english female') || name.includes('google us english')) {
-    score += 300;
-  }
-
-  // "enhanced"/"premium" версии — лучше звучат
-  if (name.includes('enhanced') || name.includes('premium')) score += 50;
-
-  return score;
+  if (isMale(v)) return -1000;
+  let s = 0;
+  if (lang.startsWith('en')) s += 100;
+  if (FEMALE_NAMES_EN.some(f => name.includes(f))) s += 200;
+  if (name.includes('samantha') || name.includes('karen') || name.includes('moira') ||
+      name.includes('tessa') || name.includes('serena') || name.includes('ava') ||
+      name.includes('google us english') || name.includes('google uk english female')) s += 300;
+  if (name.includes('enhanced') || name.includes('premium')) s += 50;
+  return s;
 }
 
-function pickFemaleVoice() {
+function scoreRu(v) {
+  const name = v.name.toLowerCase();
+  const lang = v.lang.toLowerCase();
+  if (isMale(v)) return -1000;
+  let s = 0;
+  if (lang.startsWith('ru')) s += 100;
+  if (FEMALE_NAMES_RU.some(f => name.includes(f))) s += 200;
+  if (name.includes('milena') || name.includes('katya') || name.includes('google русский')) s += 300;
+  if (name.includes('enhanced') || name.includes('premium')) s += 50;
+  return s;
+}
+
+function pickVoices() {
   allVoices = synth.getVoices();
-  if (!allVoices.length) {
-    log('Голоса ещё не загружены...', 'warn');
-    return;
-  }
+  if (!allVoices.length) { log('Голоса ещё не загружены...', 'warn'); return; }
 
-  // Сортируем по score
-  const sorted = [...allVoices].sort((a, b) => voiceScore(b) - voiceScore(a));
-  const top = sorted[0];
-  if (top && voiceScore(top) > 0) {
-    femaleVoice = top;
-  } else {
-    femaleVoice = allVoices[0];
-  }
+  const sortedEn = [...allVoices].sort((a, b) => scoreEn(b) - scoreEn(a));
+  voiceEn = (sortedEn[0] && scoreEn(sortedEn[0]) > 0) ? sortedEn[0] : null;
 
-  // Логируем все голоса, чтобы было видно
-  log('Доступные голоса (' + allVoices.length + '):', 'info');
-  allVoices.forEach(v => {
-    const s = voiceScore(v);
-    const mark = s > 0 ? '✓' : '✗';
-    log('  ' + mark + ' ' + v.name + ' [' + v.lang + '] score=' + s, s > 0 ? 'info' : 'warn');
-  });
+  const sortedRu = [...allVoices].sort((a, b) => scoreRu(b) - scoreRu(a));
+  voiceRu = (sortedRu[0] && scoreRu(sortedRu[0]) > 0) ? sortedRu[0] : null;
 
-  if (femaleVoice) {
-    log('🎤 Выбран голос Emma: ' + femaleVoice.name + ' (' + femaleVoice.lang + ')', 'info');
-  }
+  log('🇬🇧 EN: ' + (voiceEn ? voiceEn.name + ' (' + voiceEn.lang + ')' : 'НЕ НАЙДЕН'), voiceEn ? 'info' : 'warn');
+  log('🇷🇺 RU: ' + (voiceRu ? voiceRu.name + ' (' + voiceRu.lang + ')' : 'НЕ НАЙДЕН'), voiceRu ? 'info' : 'warn');
 
-  // Заполняем выпадающий список в панели отладки
-  voiceSelect.innerHTML = '';
-  sorted.forEach(v => {
+  voiceSelectEn.innerHTML = '';
+  sortedEn.forEach(v => {
     const opt = document.createElement('option');
-    opt.value = v.name;
-    opt.textContent = v.name + ' — ' + v.lang + ' (score ' + voiceScore(v) + ')';
-    if (femaleVoice && v.name === femaleVoice.name && v.lang === femaleVoice.lang) {
-      opt.selected = true;
-    }
-    voiceSelect.appendChild(opt);
+    opt.value = v.name + '||' + v.lang;
+    opt.textContent = v.name + ' — ' + v.lang + ' (en ' + scoreEn(v) + ')';
+    if (voiceEn && v.name === voiceEn.name && v.lang === voiceEn.lang) opt.selected = true;
+    voiceSelectEn.appendChild(opt);
+  });
+  voiceSelectRu.innerHTML = '';
+  sortedRu.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name + '||' + v.lang;
+    opt.textContent = v.name + ' — ' + v.lang + ' (ru ' + scoreRu(v) + ')';
+    if (voiceRu && v.name === voiceRu.name && v.lang === voiceRu.lang) opt.selected = true;
+    voiceSelectRu.appendChild(opt);
   });
 }
 
-synth.onvoiceschanged = () => { log('voiceschanged event'); pickFemaleVoice(); };
-pickFemaleVoice();
-// iOS Safari иногда отдаёт голоса с задержкой — попробуем ещё раз через секунду
-setTimeout(pickFemaleVoice, 1000);
-setTimeout(pickFemaleVoice, 3000);
+synth.onvoiceschanged = () => { log('voiceschanged event'); pickVoices(); };
+pickVoices();
+setTimeout(pickVoices, 1000);
+setTimeout(pickVoices, 3000);
 
-// Ручной выбор голоса из панели отладки
-voiceSelect.addEventListener('change', () => {
-  const [name, lang] = voiceSelect.value.split(' — ');
-  const found = allVoices.find(v => v.name === name && v.lang === lang.split(' ')[0]);
-  if (found) {
-    femaleVoice = found;
-    log('🎤 Вручную выбран: ' + found.name + ' (' + found.lang + ')', 'info');
-  }
+voiceSelectEn.addEventListener('change', () => {
+  const [name, lang] = voiceSelectEn.value.split('||');
+  const found = allVoices.find(v => v.name === name && v.lang === lang);
+  if (found) { voiceEn = found; log('🇬🇧 EN вручную: ' + found.name, 'info'); }
+});
+voiceSelectRu.addEventListener('change', () => {
+  const [name, lang] = voiceSelectRu.value.split('||');
+  const found = allVoices.find(v => v.name === name && v.lang === lang);
+  if (found) { voiceRu = found; log('🇷🇺 RU вручную: ' + found.name, 'info'); }
 });
 
 /* =========================================================
@@ -383,44 +378,54 @@ startBtn.addEventListener('click', async () => {
   history = [{
     role: 'system',
     content:
-`You are Emma, a warm and friendly female ${learningLang} tutor. The user's native language is ${nativeLang}.
+`You are Emma, a warm, friendly female ${learningLang} tutor. User's native language is ${nativeLang}.
 
 ${LEVEL_PROMPT[level] || ''}
 
-YOUR JOB — detect user's language and respond correctly:
+YOU ARE BILINGUAL. You are like a real friend who speaks both languages.
 
-CASE A: The user writes/speaks in ${learningLang} (they are practicing).
-→ Reply ONLY in ${learningLang}. Keep it short (1-3 sentences). Continue the conversation naturally.
-→ If there is a grammar/vocabulary mistake, gently fix it in a short note in ${nativeLang} on a new line in this exact format:
-[${nativeLang}] Небольшая правка: "wrong" → "correct".
+=== RULE 1 — User writes in ${learningLang} (they practice) ===
+Reply ENTIRELY in ${learningLang}. Short (1-3 sentences). Continue the chat naturally.
+If they made a mistake, add ONE short line in ${nativeLang} at the end in this format:
+[${nativeLang}] правка: "wrong" → "correct"
 
-CASE B: The user writes/speaks in ${nativeLang} (they are asking for help with ${learningLang}).
-→ They want to know how to say something in ${learningLang}.
-→ FIRST give the ${learningLang} translation on its own line.
-→ THEN on a new line add a short note in ${nativeLang} in this exact format:
+=== RULE 2 — User writes in ${nativeLang} (casual chat, greeting, question) ===
+Reply ENTIRELY in ${nativeLang}. NO English. Like a friend.
+Do NOT translate what they wrote. Just answer them.
+
+=== RULE 3 — User asks "как сказать X по-${learningLang}" ===
+Give the ${learningLang} phrase first (short), then on a new line a ${nativeLang} explanation in format:
 [${nativeLang}] пояснение.
 
-EXAMPLE — user says: "как сказать я устал?"
-Your reply:
-"I'm tired."
+=== RULE 4 — User asks you to speak ${nativeLang} ===
+Switch COMPLETELY to ${nativeLang} and stay there. Still help with ${learningLang} if asked.
+
+EXAMPLES:
+
+User: "Привет! Как дела?"
+You: "Привет! У меня всё отлично, спасибо. А ты как? Чем занимался сегодня?"
+
+User: "Ты должна говорить по-русски, когда я прошу."
+You: "Хорошо, буду говорить по-русски. Извини. О чём хочешь поболтать?"
+
+User: "Как сказать 'я устал' по-английски?"
+You: "I'm tired."
 [${nativeLang}] "I'm tired" — так говорят на английском. Повтори вслух!
 
-EXAMPLE — user says: "How are you?"
-Your reply:
-"I'm great, thanks for asking! How about you?"
+User: "Hello! How are you?"
+You: "Hi! I'm doing great, thanks for asking. What about you?"
 
 RULES:
-1. Always end with a short follow-up question in ${learningLang}.
-2. Talk about everyday things.
-3. Never say you're an AI. You are Emma.
-4. Keep total reply under 3 short sentences + optional note.
-5. IMPORTANT: Output ONLY the reply text. No labels, no "Emma:", no prefixes.`
+- MATCH the user's language. Russian in → Russian out. English in → English out.
+- Keep it short (1-3 sentences).
+- Output ONLY reply text. No labels, no "Emma:", no prefixes.
+- Remember what was said earlier in the conversation.`
   }];
 
-  pickFemaleVoice();
+  pickVoices();
   setupScreen.style.display = 'none';
   chatScreen.style.display  = 'flex';
-  addMsg('system', `Ты изучаешь ${learningLang} на уровне ${level}. Говори с Emma на английском или по-русски — она поймёт.`);
+  addMsg('system', `Ты изучаешь ${learningLang} на уровне ${level}. Emma отвечает на твоём языке — а когда говоришь по-английски, помогает и поправляет.`);
 
   log('Язык: ' + learningLang + ' / родной: ' + nativeLang + ' / уровень: ' + level);
   await initMic();
@@ -488,7 +493,7 @@ function startLevelMeter() {
    ========================================================= */
 async function greetUser() {
   setStatus('Emma думает...', true);
-  const reply = await askAI('(The user just joined. Greet them warmly in ' + learningLang + ' and ask one simple question. Include a short [' + nativeLang + '] line with translation.)');
+  const reply = await askAI('(The user just joined. Greet them warmly IN ' + nativeLang.toUpperCase() + ' — in Russian if nativeLang is Russian. Do NOT use English. Keep it short, ask how they are.)');
   if (reply && reply.trim()) {
     renderBotMessage(reply);
     await speak(reply);
@@ -559,7 +564,7 @@ micBtn.addEventListener('click', () => {
 });
 
 /* =========================================================
-   WHISPER (авто-определение языка)
+   WHISPER
    ========================================================= */
 async function transcribeAndReply(audioBlob, mimeType) {
   isBusy = true;
@@ -635,14 +640,13 @@ async function handleUserMessage(userText) {
 
   if (!reply || !reply.trim()) {
     log('⚠️ Emma вернула пустой ответ, пробую ещё раз...', 'warn');
-    // Повторная попытка с другим запросом
-    const retry = await askAI('Please reply to the user\'s last message in ' + learningLang + '.');
+    const retry = await askAI('Please reply to my last message.');
     if (retry && retry.trim()) {
       renderBotMessage(retry);
       history.push({ role: 'assistant', content: retry });
       await speak(retry);
     } else {
-      addMsg('bot', 'Sorry, I got distracted. Can you say that again?');
+      addMsg('bot', 'Извини, я отвлеклась. Повтори, пожалуйста.');
     }
   } else {
     renderBotMessage(reply);
@@ -656,7 +660,7 @@ async function handleUserMessage(userText) {
 }
 
 /* =========================================================
-   GROQ — с reasoning_effort low и увеличенным max_tokens
+   GROQ
    ========================================================= */
 async function askAI(extraPrompt) {
   const messages = extraPrompt
@@ -668,8 +672,8 @@ async function askAI(extraPrompt) {
       model: MODEL,
       messages,
       temperature: 0.7,
-      max_tokens: 800,          // было 260 — теперь хватит и на reasoning, и на ответ
-      reasoning_effort: 'low'   // gpt-oss: минимум размышлений, максимум ответа
+      max_tokens: 800,
+      reasoning_effort: 'low'
     };
 
     const res = await fetch(API_URL, {
@@ -691,26 +695,14 @@ async function askAI(extraPrompt) {
     const choice = data.choices && data.choices[0];
     const msg = choice && choice.message;
 
-    // Полный ответ в лог для диагностики
-    log('Groq response: ' + JSON.stringify({
-      finish_reason: choice && choice.finish_reason,
-      content: msg && msg.content ? msg.content.slice(0, 80) : '(empty)',
-      reasoning: msg && msg.reasoning ? '(есть)' : '(нет)',
-      usage: data.usage
-    }), 'info');
+    log('Groq: finish=' + (choice && choice.finish_reason) + ', content_len=' + ((msg && msg.content) ? msg.content.length : 0), 'info');
 
-    // Основной путь — content
     let content = (msg && msg.content) ? msg.content.trim() : '';
 
-    // Fallback: если content пуст, но модель успела что-то подумать в reasoning —
-    // часто там есть черновик ответа. Попробуем вытащить последний абзац.
     if (!content && msg && msg.reasoning) {
-      log('⚠️ content пуст, но есть reasoning — пробую извлечь ответ из него', 'warn');
-      const r = msg.reasoning;
-      // Обычно в reasoning финальная мысль — в конце
-      const parts = r.split(/\n\n+/).filter(p => p.trim().length > 10);
-      content = (parts[parts.length - 1] || r).trim();
-      // Обрезаем до 2 предложений
+      log('⚠️ content пуст, извлекаю из reasoning', 'warn');
+      const parts = msg.reasoning.split(/\n\n+/).filter(p => p.trim().length > 10);
+      content = (parts[parts.length - 1] || msg.reasoning).trim();
       content = content.split(/(?<=[.!?])\s+/).slice(0, 3).join(' ');
     }
 
@@ -720,6 +712,56 @@ async function askAI(extraPrompt) {
     log('Groq fetch error: ' + e.message, 'err');
     return '';
   }
+}
+
+/* =========================================================
+   ОПРЕДЕЛЕНИЕ ЯЗЫКА ТЕКСТА
+   ========================================================= */
+function detectLang(text) {
+  const cyr = (text.match(/[а-яёіїєґ]/gi) || []).length;
+  const lat = (text.match(/[a-z]/gi) || []).length;
+  if (cyr > lat) return 'ru';
+  if (lat > cyr) return 'en';
+  return 'en';
+}
+
+/* =========================================================
+   РАЗБИВКА ТЕКСТА НА ЯЗЫКОВЫЕ СЕГМЕНТЫ
+   ========================================================= */
+function splitIntoLangSegments(text) {
+  // Убираем (Correct: ...) на всякий
+  text = text.replace(/\(Correct:[^)]*\)/gi, '');
+
+  // Убираем маркеры [Русский] / [Russian] — они на разных nativeLang
+  const markers = ['Russian', 'Русский', 'Українська', 'Ukrainian', 'Қазақша', 'Kazakh', 'English'];
+  for (const m of markers) {
+    const re = new RegExp('\\[' + m + '\\]\\s*', 'gi');
+    text = text.replace(re, '');
+  }
+
+  // Разбиваем по строкам, потом по предложениям
+  const chunks = [];
+  for (const line of text.split(/\n+/)) {
+    const subs = line.split(/([.!?…])\s+/);
+    for (let i = 0; i < subs.length; i += 2) {
+      const s = (subs[i] || '').trim();
+      const p = subs[i + 1] || '';
+      if (s) chunks.push(s + p);
+    }
+  }
+
+  // Объединяем соседние куски одного языка
+  const segments = [];
+  for (const c of chunks) {
+    const lang = detectLang(c);
+    if (segments.length && segments[segments.length - 1].lang === lang) {
+      segments[segments.length - 1].text += ' ' + c;
+    } else {
+      segments.push({ lang, text: c });
+    }
+  }
+
+  return segments.filter(s => s.text.trim());
 }
 
 /* =========================================================
@@ -749,7 +791,7 @@ function renderBotMessage(raw) {
   spk.className = 'speaker';
   spk.textContent = '🔊';
   spk.title = 'Озвучить';
-  spk.addEventListener('click', () => { unlockSpeech(); speak(mainLines.join(' ') || raw); });
+  spk.addEventListener('click', () => { unlockSpeech(); speak(raw); });
   div.appendChild(spk);
 
   chatLog.appendChild(div);
@@ -757,62 +799,79 @@ function renderBotMessage(raw) {
 }
 
 /* =========================================================
-   ОЗВУЧКА
+   ОЗВУЧКА — многосегментная, по языкам
    ========================================================= */
 function speak(text) {
   return new Promise((resolve) => {
     if (isMuted || !text) { resolve(); return; }
 
+    const segments = splitIntoLangSegments(text);
+    if (!segments.length) { resolve(); return; }
+
+    log('🔊 Сегментов для озвучки: ' + segments.length + ' → ' +
+        segments.map(s => s.lang + ':"' + s.text.slice(0, 30) + '"').join(' | '));
+
     try { synth.cancel(); } catch(e) {}
 
-    const noteRe = new RegExp('\\[' + nativeLang + '\\][^\\n]*', 'gi');
-    let spoken = text.replace(noteRe, '').replace(/\(Correct:[^)]*\)/gi, '').trim();
-    if (!spoken) { resolve(); return; }
-
-    const u = new SpeechSynthesisUtterance(spoken);
-    u.lang = LANG_CODES[learningLang] || 'en-US';
-    u.rate = level === 'Beginner' ? 0.8 : level === 'Elementary' ? 0.9 : 0.95;
-    u.pitch = 1.2;   // выше — женственнее
-    u.volume = 1;
-    if (femaleVoice) {
-      u.voice = femaleVoice;
-      log('🎤 Озвучка голосом: ' + femaleVoice.name, 'info');
-    } else {
-      log('⚠️ Женский голос не найден, использую системный', 'warn');
-    }
-
-    let done = false;
+    let idx = 0;
+    let finished = false;
     const finish = () => {
-      if (done) return;
-      done = true;
+      if (finished) return;
+      finished = true;
       avatar.classList.remove('speaking');
       emmaStatus.textContent = 'Онлайн';
       resolve();
     };
 
-    u.onstart = () => {
-      log('🔊 Emma говорит: "' + spoken.slice(0, 60) + (spoken.length > 60 ? '...' : '') + '"');
-      avatar.classList.add('speaking');
-      emmaStatus.textContent = 'Говорит...';
-    };
-    u.onend = () => { log('🔊 Озвучка завершена'); finish(); };
-    u.onerror = (e) => { log('✗ Ошибка озвучки: ' + (e.error || 'unknown'), 'err'); finish(); };
+    const playNext = () => {
+      if (idx >= segments.length) { finish(); return; }
+      const seg = segments[idx++];
 
-    const estMs = Math.min(40000, Math.max(4000, spoken.length * 90));
+      const u = new SpeechSynthesisUtterance(seg.text);
+      u.lang = seg.lang === 'ru' ? 'ru-RU' : 'en-US';
+      u.rate = seg.lang === 'ru'
+        ? (level === 'Beginner' ? 0.9 : 1.0)
+        : (level === 'Beginner' ? 0.85 : 0.95);
+      u.pitch = 1.2;
+      u.volume = 1;
+
+      if (seg.lang === 'ru' && voiceRu) u.voice = voiceRu;
+      else if (seg.lang === 'en' && voiceEn) u.voice = voiceEn;
+      else if (voiceEn) u.voice = voiceEn;
+
+      u.onstart = () => {
+        log('🔊 [' + seg.lang + '] ' + seg.text.slice(0, 60));
+        avatar.classList.add('speaking');
+        emmaStatus.textContent = 'Говорит...';
+      };
+      u.onend = () => {
+        // небольшая пауза между сегментами
+        setTimeout(playNext, 150);
+      };
+      u.onerror = (e) => {
+        log('✗ Ошибка озвучки сегмента [' + seg.lang + ']: ' + (e.error || 'unknown'), 'err');
+        setTimeout(playNext, 100);
+      };
+
+      try {
+        synth.speak(u);
+      } catch (e) {
+        log('speak() ошибка: ' + e.message, 'err');
+        setTimeout(playNext, 100);
+      }
+    };
+
+    // Глобальный таймаут на всю озвучку
+    const totalLen = segments.reduce((a, s) => a + s.text.length, 0);
+    const estMs = Math.min(90000, Math.max(6000, totalLen * 110));
     setTimeout(() => {
-      if (!done) {
-        log('⚠️ Озвучка не завершилась вовремя, снимаю статус', 'warn');
+      if (!finished) {
+        log('⚠️ Озвучка не завершилась вовремя', 'warn');
         finish();
       }
     }, estMs);
 
-    try {
-      synth.speak(u);
-      setTimeout(() => { if (synth.paused) synth.resume(); }, 100);
-    } catch (e) {
-      log('speak() ошибка: ' + e.message, 'err');
-      finish();
-    }
+    playNext();
   });
 }
 
