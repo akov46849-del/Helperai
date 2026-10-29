@@ -9,7 +9,7 @@
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Montserrat',sans-serif;background:#0a0a14;color:#fff;padding:20px;min-height:100vh}
   .container{max-width:800px;margin:0 auto;background:#12122a;padding:30px;border-radius:20px;border:1px solid #ff2e88}
-  :root{--pink:#ff2e88;--purple:#8a2be2;--blue:#00d4ff;--gold:#ffd166;--muted:#a0a0c0}
+  :root{--pink:#ff2e88;--purple:#8a2be2;--blue:#00d4ff;--gold:#ffd166;--muted:#a0a0c0;--red:#ff3366}
   h1{color:var(--pink);text-align:center;margin-bottom:20px;font-weight:900}
   h2{font-weight:800;margin-bottom:16px}
   h3{margin:20px 0 10px;color:var(--muted);font-size:.85rem;letter-spacing:2px;text-transform:uppercase}
@@ -30,11 +30,12 @@
     border-radius:12px;font-weight:800;cursor:pointer;width:100%;font-size:1rem;letter-spacing:1px}
   .btn:hover{opacity:.9}
   .btn-ghost{background:#2a2a3a;width:auto;padding:10px 20px;font-size:.85rem}
-  .header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap}
+  .btn-danger{background:var(--red);margin-top:30px;}
   .error{color:var(--pink);margin-top:10px;text-align:center}
   #admin{display:none}
   .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap}
   .top .email{font-size:.8rem;color:var(--muted)}
+  .round-info{text-align:center;margin-top:15px;font-size:0.8rem;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -62,6 +63,9 @@
 
     <h3>Голоса</h3>
     <div id="list"></div>
+    
+    <div class="round-info" id="roundInfo">Текущий раунд: 1</div>
+    <button class="btn btn-danger" onclick="resetVotes()">⚠️ Обнулить все голоса (Новый раунд)</button>
   </div>
 </div>
 
@@ -71,23 +75,12 @@
   let email = localStorage.getItem('admin_email') || '';
 
   const ARTISTS = [
-    {id:'basta', name:'🇷🇺 Баста'},
-    {id:'dara', name:'🇧🇬 DARA'},
-    {id:'lady_gaga', name:'🇺🇸 Lady Gaga'},
-    {id:'ed_sheeran', name:'🇬🇧 Ed Sheeran'},
-    {id:'the_weeknd', name:'🇨🇦 The Weeknd'},
-    {id:'indila', name:'🇫🇷 Indila'},
-    {id:'rammstein', name:'🇩🇪 Rammstein'},
-    {id:'rosalia', name:'🇪🇸 Rosalía'},
-    {id:'eros', name:'🇮🇹 Eros Ramazzotti'},
-    {id:'zara', name:'🇸🇪 Zara Larsson'},
-    {id:'alan_walker', name:'🇳🇴 Alan Walker'},
-    {id:'garrix', name:'🇳🇱 Martin Garrix'},
-    {id:'sia', name:'🇦🇺 Sia'},
-    {id:'bts', name:'🇰🇷 BTS'},
-    {id:'shakira', name:'🇨🇴 Shakira'},
-    {id:'rema', name:'🇳🇬 Rema'},
-    {id:'bad_bunny', name:'🇵🇷 Bad Bunny'}
+    {id:'basta', name:'🇷🇺 Баста'}, {id:'dara', name:'🇧🇬 DARA'}, {id:'lady_gaga', name:'🇺🇸 Lady Gaga'},
+    {id:'ed_sheeran', name:'🇬🇧 Ed Sheeran'}, {id:'the_weeknd', name:'🇨🇦 The Weeknd'}, {id:'indila', name:'🇫🇷 Indila'},
+    {id:'rammstein', name:'🇩🇪 Rammstein'}, {id:'rosalia', name:'🇪🇸 Rosalía'}, {id:'eros', name:'🇮🇹 Eros Ramazzotti'},
+    {id:'zara', name:'🇸🇪 Zara Larsson'}, {id:'alan_walker', name:'🇳🇴 Alan Walker'}, {id:'garrix', name:'🇳🇱 Martin Garrix'},
+    {id:'sia', name:'🇦🇺 Sia'}, {id:'bts', name:'🇰🇷 BTS'}, {id:'shakira', name:'🇨🇴 Shakira'},
+    {id:'rema', name:'🇳🇬 Rema'}, {id:'bad_bunny', name:'🇵🇷 Bad Bunny'}
   ];
 
   function showScreen() {
@@ -104,8 +97,7 @@
     err.textContent = '';
     try {
       const r = await fetch(API + '/login', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({email: emailVal, password: passVal})
       });
       const d = await r.json();
@@ -126,14 +118,15 @@
 
   async function refresh() {
     try {
-      const [sR, rR] = await Promise.all([
-        fetch(API + '/status'), fetch(API + '/results')
-      ]);
+      const [sR, rR] = await Promise.all([ fetch(API + '/status'), fetch(API + '/results') ]);
       const s = await sR.json();
       const r = await rR.json();
       const results = r.results || {};
+      
       const st = document.getElementById('status');
       const btn = document.getElementById('toggle');
+      document.getElementById('roundInfo').textContent = 'Текущий раунд: ' + s.round;
+
       if (s.isOpen) {
         st.textContent = '🟢 ГОЛОСОВАНИЕ ОТКРЫТО';
         st.className = 'status open';
@@ -170,11 +163,7 @@
   async function adjust(artistId, delta) {
     try {
       const r = await fetch(API + '/admin/adjust', {
-        method: 'POST',
-        headers: {
-          'Content-Type':'application/json',
-          'Authorization': 'Bearer ' + token
-        },
+        method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({artistId, delta})
       });
       const d = await r.json();
@@ -187,11 +176,23 @@
   async function toggle() {
     try {
       const r = await fetch(API + '/admin/toggle', {
-        method: 'POST',
-        headers: {'Authorization': 'Bearer ' + token}
+        method: 'POST', headers: {'Authorization': 'Bearer ' + token}
       });
       const d = await r.json();
       if (!r.ok) return alert(d.error || 'Ошибка');
+      refresh();
+    } catch (e) { alert('Ошибка сети'); }
+  }
+
+  async function resetVotes() {
+    if (!confirm('ВНИМАНИЕ! Это удалит ВСЕ голоса и разрешит всем проголосовать заново. Продолжить?')) return;
+    try {
+      const r = await fetch(API + '/admin/reset', {
+        method: 'POST', headers: {'Authorization': 'Bearer ' + token}
+      });
+      const d = await r.json();
+      if (!r.ok) return alert(d.error || 'Ошибка');
+      alert('Голоса обнулены! Начинается раунд ' + d.newRound);
       refresh();
     } catch (e) { alert('Ошибка сети'); }
   }
